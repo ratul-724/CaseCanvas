@@ -1,0 +1,121 @@
+<div class="cz-wrap" id="cz-{{ block.id }}">
+  <button type="button" class="cz-open" style="background: {{ block.settings.color }}">{{ block.settings.label }}</button>
+  {% if block.settings.fee_note != blank %}<small class="cz-note">{{ block.settings.fee_note }}</small>{% endif %}
+
+  <div class="cz-modal" hidden>
+    <div class="cz-panel">
+      <button type="button" class="cz-x" aria-label="Close">&times;</button>
+      <div class="cz-stage">
+        <div class="cz-phone">
+          <img class="cz-img" alt="" width="230" height="480" hidden>
+          <span class="cz-cam"></span>
+        </div>
+      </div>
+      <div class="cz-ctrl">
+        <h3>Design your case</h3>
+        <label>1. Phone model
+          <select class="cz-variant">
+            {% for v in product.variants %}
+              <option value="{{ v.id }}" {% unless v.available %}disabled{% endunless %}>{{ v.title }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>2. Upload your design
+          <input type="file" class="cz-file" accept="image/png,image/jpeg">
+        </label>
+        <label>3. Zoom
+          <input type="range" class="cz-zoom" min="100" max="300" value="100">
+        </label>
+        <p class="cz-hint">Drag the image to move it.</p>
+        <button type="button" class="cz-add">Add to cart</button>
+        <p class="cz-msg"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .cz-wrap{margin:14px 0}
+  .cz-open{color:#fff;border:0;border-radius:10px;padding:13px 22px;font-size:15px;font-weight:600;cursor:pointer;width:100%}
+  .cz-note{display:block;margin-top:6px;opacity:.7}
+  .cz-modal{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:99999;display:flex;align-items:center;justify-content:center;padding:14px}
+  .cz-modal[hidden]{display:none}
+  .cz-panel{position:relative;background:#fff;color:#111;border-radius:16px;padding:22px;max-width:760px;width:100%;max-height:94vh;overflow:auto;display:flex;gap:24px;flex-wrap:wrap;justify-content:center}
+  .cz-x{position:absolute;top:8px;right:14px;border:0;background:none;font-size:28px;cursor:pointer}
+  .cz-stage{width:230px}
+  .cz-phone{position:relative;width:230px;height:480px;border-radius:38px;border:4px solid #222;overflow:hidden;background:#eee;touch-action:none;cursor:grab}
+  .cz-img{width:100%;height:100%;object-fit:cover;pointer-events:none;user-select:none}
+  .cz-cam{position:absolute;top:12px;left:12px;width:84px;height:84px;border-radius:22px;background:#151515;box-shadow:0 0 0 2px #3a3a3a;pointer-events:none}
+  .cz-ctrl{flex:1;min-width:230px;display:flex;flex-direction:column;gap:14px}
+  .cz-ctrl h3{margin:0}
+  .cz-ctrl label{display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:600}
+  .cz-ctrl select,.cz-ctrl input[type=file]{font-weight:400;padding:8px;border:1px solid #ccc;border-radius:8px}
+  .cz-hint{margin:0;font-size:13px;opacity:.7}
+  .cz-add{background:#111;color:#fff;border:0;border-radius:10px;padding:13px;font-size:15px;font-weight:600;cursor:pointer}
+  .cz-add:disabled{opacity:.5}
+  .cz-msg{margin:0;font-size:13px;color:#b91c1c}
+</style>
+
+<script>
+  (function () {
+    var root = document.getElementById('cz-{{ block.id }}');
+    var $ = function (s) { return root.querySelector(s); };
+    var modal = $('.cz-modal'), img = $('.cz-img'), phone = $('.cz-phone');
+    var file = $('.cz-file'), zoom = $('.cz-zoom'), msg = $('.cz-msg'), add = $('.cz-add');
+    var x = 0, y = 0, drag = null;
+
+    function paint() { img.style.transform = 'translate(' + x + 'px,' + y + 'px) scale(' + zoom.value / 100 + ')'; }
+
+    $('.cz-open').onclick = function () { modal.hidden = false; };
+    $('.cz-x').onclick = function () { modal.hidden = true; };
+    modal.onclick = function (e) { if (e.target === modal) modal.hidden = true; };
+
+    file.onchange = function () {
+      var f = file.files[0];
+      if (!f) return;
+      img.src = URL.createObjectURL(f);
+      img.hidden = false;
+      x = 0; y = 0; zoom.value = 100; paint();
+    };
+    zoom.oninput = paint;
+
+    phone.onpointerdown = function (e) { drag = { px: e.clientX - x, py: e.clientY - y }; phone.setPointerCapture(e.pointerId); };
+    phone.onpointermove = function (e) { if (!drag) return; x = e.clientX - drag.px; y = e.clientY - drag.py; paint(); };
+    phone.onpointerup = function () { drag = null; };
+
+    add.onclick = function () {
+      msg.textContent = '';
+      if (!file.files[0]) { msg.textContent = 'Please upload your design first.'; return; }
+      add.disabled = true;
+      fetch(window.Shopify.routes.root + 'cart/add.js', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: [{
+            id: Number($('.cz-variant').value),
+            quantity: 1,
+            properties: { Customized: 'Yes', Zoom: zoom.value + '%', Offset: Math.round(x) + ',' + Math.round(y) }
+          }]
+        })
+      }).then(function (r) {
+        if (!r.ok) throw new Error();
+        window.location.href = window.Shopify.routes.root + 'cart';
+      }).catch(function () {
+        msg.textContent = 'Could not add to cart. Please try again.';
+        add.disabled = false;
+      });
+    };
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Customize button",
+  "target": "section",
+  "settings": [
+    { "type": "text", "id": "label", "label": "Button text", "default": "Customize your case" },
+    { "type": "text", "id": "fee_note", "label": "Fee note", "default": "Small customization fee applies" },
+    { "type": "color", "id": "color", "label": "Button color", "default": "#4f46e5" }
+  ]
+}
+{% endschema %}
